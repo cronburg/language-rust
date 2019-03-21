@@ -65,8 +65,8 @@ import Data.Semigroup                  ( (<>) )
 
 import Text.Read                       ( readMaybe )
 
-import Data.List.NonEmpty              ( NonEmpty(..), (<|) )
-import qualified Data.List.NonEmpty as N
+import Language.Rust.Parser.NonEmpty ( NonEmpty(..), (<|), (|>), (|:) )
+import qualified Language.Rust.Parser.NonEmpty as N
 }
 
 -- in order to document the parsers, we have to alias them
@@ -159,6 +159,9 @@ import qualified Data.List.NonEmpty as N
   ')'            { Spanned (CloseDelim Paren) _ }
   ']'            { Spanned (CloseDelim Bracket) _ }
   '}'            { Spanned (CloseDelim Brace) _ }
+
+  -- Embedded code
+  EMBEDDED_CODE  { Spanned (EmbeddedCode _) _ }
 
   -- Literals.
   byte           { Spanned (LiteralTok ByteTok{} _) _ }
@@ -1097,6 +1100,7 @@ expr :: { Expr Span }
   | struct_expr                                                               { $1 }
   | block_expr                                                                { $1 }
   | lambda_expr_block                                                         { $1 }
+  | embedded_expr                                                             { $1 }
 
 nostruct_expr :: { Expr Span }
   : gen_expression(nostruct_expr,nostruct_expr,nonstructblock_expr)           { $1 }
@@ -1121,6 +1125,9 @@ blockpostfix_expr :: { Expr Span }
   | postfix_blockexpr(vis_safety_block)                                       { $1 }
   | left_gen_expression(blockpostfix_expr,expr,expr)                          { $1 } 
 
+-- Can't put attributes on embedded code (seems like a reasonable restriction at the time of this writing):
+embedded_expr :: { Expr Span }
+  : EMBEDDED_CODE  { toEmbedded [] $1 }
 
 -- Finally, what remains is the more mundane definitions of particular types of expressions.
 
@@ -1834,6 +1841,9 @@ expParseError (Spanned t _, exps) = fail $ "Syntax error: unexpected `" ++ show 
 toIdent :: Spanned Token -> Spanned Ident
 toIdent (Spanned (IdentTok i) s) = Spanned i s
 
+toEmbedded :: [Attribute Span] -> Spanned Token -> Expr Span
+toEmbedded as (Spanned (EmbeddedCode c) s) = EmbeddedExpr as c s
+
 -- | Try to convert an expression to a statement given information about whether there is a trailing
 -- semicolon
 toStmt :: Expr Span -> Bool -> Bool -> Span -> Stmt Span
@@ -1942,17 +1952,5 @@ nudge :: Int -> Int -> Span -> Span
 nudge leftSide rightSide (Span l r) = Span l' r'
   where l' = incPos l leftSide
         r' = incPos r rightSide
-
-
--- Functions related to `NonEmpty` that really should already exist...
-
--- | Append an element to a list to get a nonempty list (flipped version of '(:|)')
-(|:) :: [a] -> a -> NonEmpty a
-[] |: y = y :| []
-(x:xs) |: y = x :| (xs ++ [y])
-
--- | Append an element to a nonempty list to get anothg nonempty list (flipped version of '(<|)')
-(|>) :: NonEmpty a -> a -> NonEmpty a
-(x:|xs) |> y = x :| (xs ++ [y])
 
 }

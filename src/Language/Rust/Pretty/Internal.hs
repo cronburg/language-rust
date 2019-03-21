@@ -29,6 +29,7 @@ module Language.Rust.Pretty.Internal (
   printUnsafety,
   printFnArgsAndRet,
   printIdent,
+  printName,
   
   -- ** Paths
   printPath,
@@ -108,7 +109,7 @@ import Data.Text.Prettyprint.Doc hiding ( (<+>), hsep, indent, vsep )
 import Data.Maybe               ( maybeToList, fromMaybe )
 import Data.Foldable            ( toList )
 import Data.List                ( unfoldr )
-import qualified Data.List.NonEmpty as N
+import qualified Language.Rust.Parser.NonEmpty as N
 
 -- | Print a source file
 printSourceFile :: SourceFile a -> Doc a
@@ -122,10 +123,13 @@ printSourceFile (SourceFile shebang as items) = foldr1 (\x y -> x <#> "" <#> y) 
 printName :: Name -> Doc a
 printName = pretty
 
+printEmbedded :: String -> Doc a
+printEmbedded s = "${" <> printName s <> "}$"
+
 -- | Print an identifier
 printIdent :: Ident -> Doc a
-printIdent (Ident s False _) = pretty s
-printIdent (Ident s True _) = "r#" <> pretty s
+printIdent (Ident s False _) = printName s
+printIdent (Ident s True _) = "r#" <> printName s 
 
 -- | Print a type (@print_type@ with @print_ty_fn@ inlined)
 -- Types are expected to always be only one line
@@ -407,12 +411,13 @@ printExprOuterAttrStyle expr isInline = glue (printEitherAttrs (expressionAttrs 
     Repeat attrs e cnt x        -> annotate x (brackets (printInnerAttrs attrs <+> printExpr e <> ";" <+> printExpr cnt))
     ParenExpr attrs e x         -> annotate x (parens (printInnerAttrs attrs <+> printExpr e))
     Try{}                       -> chainedMethodCalls expr False id
+    EmbeddedExpr _ e x          -> annotate x (printEmbedded e)
   where
   printLbl = perhaps (\(Label n x) -> annotate x ("'" <> printName n) <> ":")
   printLbl' = perhaps (\(Label n x) -> annotate x ("'" <> printName n))
   glue = if isInline then (<+>) else (</>)
 
-  -- | From an expression, seperate the first non-method-call from the list of method call suffixes
+  -- | From an expression, separate the first non-method-call from the list of method call suffixes
   --
   -- Collects in the list
   --   * methods
@@ -489,6 +494,7 @@ expressionAttrs (Repeat as _ _ _) = as
 expressionAttrs (ParenExpr as _ _) = as
 expressionAttrs (Try as _ _) = as
 expressionAttrs (Yield as _ _) = as
+expressionAttrs (EmbeddedExpr as _ _) = as
 
 -- | Print a field
 printField :: Field a -> Doc a
@@ -601,8 +607,7 @@ printAttr (SugaredDoc Outer False c x) _ = annotate x (flatAlt ("///" <> pretty 
 printCookedIdent :: Ident -> Doc a
 printCookedIdent ident@(Ident str raw _)
   | '-' `elem` str && not raw = printStr Cooked str
-  | otherwise = printIdent ident 
-
+  | otherwise = printIdent ident
 
 -- | Print an item (@print_item@)
 printItem :: Item a -> Doc a

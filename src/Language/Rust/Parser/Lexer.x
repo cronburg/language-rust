@@ -913,6 +913,11 @@ import Data.Word                       ( Word8 )
   | \xd87e [\xd400-\xd61c]
   | \xdb40 [\xdd00-\xddee]
 
+
+@embed_open  = "${"
+@embed_close = "}$"
+@embedded_code     = @embed_open ( ~[\}] (~[\$])? )* @embed_close
+
 @ident             = @xid_start @xid_continue*
 @raw_ident         = r \# @ident
 
@@ -1020,7 +1025,8 @@ $white+         { \s -> pure (Space Whitespace s)  }
 "/="            { token SlashEqual }
 "^="            { token CaretEqual }
 "%="            { token PercentEqual }
- 
+
+@embedded_code  { \s -> pure (EmbeddedCode $ (tail . tail . init . init) s) }
 
 "@"             { token At }          
 "."             { token Dot }        

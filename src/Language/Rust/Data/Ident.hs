@@ -60,7 +60,6 @@ instance Monoid Ident where
 instance Semigroup Ident where
   Ident n1 _ _ <> Ident n2 _  _ = mkIdent (n1 <> n2)
 
-
 -- | Smart constructor for making an 'Ident'.
 mkIdent :: String -> Ident
 mkIdent s = Ident s False (hashString s)

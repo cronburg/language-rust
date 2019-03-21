@@ -41,10 +41,9 @@ import Control.DeepSeq    ( NFData )
 import Data.Data          ( Data )
 import Data.Typeable      ( Typeable )
 
-import Data.List.NonEmpty ( NonEmpty(..) )
+import Language.Rust.Parser.NonEmpty ( NonEmpty(..) )
 import Data.Monoid        ( Monoid(..) )
 import Data.Semigroup     ( Semigroup(..) )
-
 
 -- | A position in a source file. The row and column information is kept only for its convenience
 -- and human-readability. Analogous to the information encoded in a cursor.

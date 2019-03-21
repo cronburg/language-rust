@@ -82,8 +82,9 @@ import Control.Monad.Trans.RWS
 
 import Data.Dynamic                    ( Dynamic, toDyn, Typeable )
 import Data.List                       ( find )
-import Data.List.NonEmpty              ( NonEmpty(..) )
-import qualified Data.List.NonEmpty as N
+import Language.Rust.Parser.NonEmpty   ( NonEmpty(..) )
+import qualified Language.Rust.Parser.NonEmpty as N
+import qualified Data.List.NonEmpty as N2 ( NonEmpty(..) )
 import Data.Maybe                      ( fromJust )
 import Data.Semigroup                  ( (<>) )
 
@@ -430,7 +431,7 @@ resolveTy :: (Typeable a, Monoid a) => TyType -> Ty a -> ResolveM (Ty a)
 -- TraitObject
 resolveTy NoSumType     o@(TraitObject b _) | length b > 1 = scope o (correct "added parens around trait object type" *> resolveTy NoSumType (ParenTy o mempty))
 resolveTy NoForType     o@TraitObject{} = scope o (correct "added parens around trait object type" *> resolveTy NoForType (ParenTy o mempty))
-resolveTy _             o@(TraitObject bds@(TraitTyParamBound{} :| _) x)
+resolveTy _             o@(TraitObject bds@(NonEmpty (TraitTyParamBound{} N2.:| _)) x)
   = scope o (TraitObject <$> traverse (resolveTyParamBound ModBound) bds <*> pure x)
 resolveTy _             o@TraitObject{} = scope o (err o "first bound in trait object should be a trait bound")
 -- ParenTy
@@ -1038,6 +1039,9 @@ resolveExprP _ _ c@(Catch as b x) = scope c $ do
   as' <- traverse (resolveAttr EitherAttr) as
   b' <- resolveBlock b
   pure (Catch as' b' x) 
+resolveExprP _ _ e@(EmbeddedExpr as code x) = scope e $ do
+  as' <- traverse (resolveAttr EitherAttr) as
+  pure (EmbeddedExpr as' code x)
 
 isBlockLike :: Expr a -> Bool
 isBlockLike If{} = True
@@ -1113,8 +1117,8 @@ instance (Typeable a, Monoid a) => Resolve (Stmt a) where resolveM = resolveStmt
 resolveBlock :: (Typeable a, Monoid a) => Block a -> ResolveM (Block a)
 resolveBlock b@(Block [] _ _) = pure b
 resolveBlock b@(Block (s:ss) r x) = scope b $ do
-  ss' <- traverse (resolveStmt TermStmt) (N.init (s :| ss))
-  s' <- resolveStmt AnyStmt (N.last (s :| ss))
+  ss' <- traverse (resolveStmt TermStmt) (N.init $ NonEmpty (s N2.:| ss))
+  s' <- resolveStmt AnyStmt (N.last $ NonEmpty (s N2.:| ss))
   pure (Block (ss' ++ [s']) r x)
 
 instance (Typeable a, Monoid a) => Resolve (Block a) where resolveM = resolveBlock

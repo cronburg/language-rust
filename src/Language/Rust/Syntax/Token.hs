@@ -90,6 +90,9 @@ data Token
   | Dollar                -- ^ @$@ token
   | Question              -- ^ @?@ token
   
+  -- Embedded code
+  | EmbeddedCode String   -- ^ @${@ ... @}$@ token containing embedded code
+
   -- Delimiters
   | OpenDelim !Delim      -- ^ One of @(@, @[@, @{@
   | CloseDelim !Delim     -- ^ One of @)@, @]@, @}@
@@ -335,7 +338,9 @@ instance Show Token where
   show Pound = "#"
   show Dollar = "$"
   show Question = "?"
-  -- Delimiters, eg. @{@, @]@, @(@
+  -- Embedded code
+  show (EmbeddedCode s) = "${" ++ s ++ "}$"
+  -- Delimiters, eg. @{@, @${@, @]@, @(@
   show (OpenDelim Paren) = "("
   show (OpenDelim Bracket) = "["
   show (OpenDelim Brace) = "{"

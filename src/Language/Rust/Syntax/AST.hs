@@ -114,7 +114,7 @@ import Data.Typeable                             ( Typeable )
 
 import Data.Char                                 ( ord )
 import Data.List                                 ( partition )
-import Data.List.NonEmpty                        ( NonEmpty(..) )
+import Language.Rust.Parser.NonEmpty             ( NonEmpty(..) )
 import Data.Semigroup                            ( Semigroup(..) )
 import Data.Word                                 ( Word8 )
 
@@ -369,6 +369,8 @@ data Expr a
   | Try [Attribute a] (Expr a) a
   -- | @yield@ with an optional value to yield (example: @yield 1@)
   | Yield [Attribute a] (Maybe (Expr a)) a
+  -- | embedded Haskell expressions for use by quasiquoters
+  | EmbeddedExpr [Attribute a] String a
   deriving (Eq, Ord, Functor, Show, Typeable, Data, Generic, Generic1, NFData)
 
 instance Located a => Located (Expr a) where
@@ -410,6 +412,7 @@ instance Located a => Located (Expr a) where
   spanOf (ParenExpr _ _ s) = spanOf s
   spanOf (Try _ _ s) = spanOf s
   spanOf (Yield _ _ s) = spanOf s
+  spanOf (EmbeddedExpr _ _ s) = spanOf s
 
 -- | Field in a struct literal expression (@syntax::ast::Field@).
 --

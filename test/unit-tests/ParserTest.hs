@@ -673,6 +673,9 @@ parserExpressions = testGroup "parsing expressions"
   , testP "match true { _ => match true { _ => true }, _ => match true { _ => true } }" (Match [] (Lit [] (Bool True Unsuffixed ()) ())
       [ Arm [] [WildP ()] Nothing (Match [] (Lit [] (Bool True Unsuffixed ()) ()) [Arm [] [WildP ()] Nothing (Lit [] (Bool True Unsuffixed ()) ()) ()] ()) ()
       , Arm [] [WildP ()] Nothing (Match [] (Lit [] (Bool True Unsuffixed ()) ()) [Arm [] [WildP ()] Nothing (Lit [] (Bool True Unsuffixed ()) ()) ()] ()) () ] ())
+  , testP " ${ haskell was here }$" (EmbeddedExpr [] " haskell was here " ())
+  , testP " ${ MyRecord { foo = bar }}$" (EmbeddedExpr [] " MyRecord { foo = bar }" ())
+  , testP " ${}$" (EmbeddedExpr [] "" ())
   ]
 
 

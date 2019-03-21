@@ -20,7 +20,7 @@ The examples below assume the following GHCi flag and import:
 >>> :set -XQuasiQuotes
 >>> import Control.Monad ( void )
 -}
-
+{-# LANGUAGE RankNTypes #-}
 
 module Language.Rust.Quote (
   lit, attr, ty, pat, stmt, expr, item, sourceFile, implItem, traitItem, tokenTree, block
@@ -53,9 +53,11 @@ import Language.Rust.Parser.ParseMonad
 import Language.Rust.Parser.Internal
 import Language.Rust.Data.InputStream   ( inputStreamFromString )
 import Language.Rust.Data.Position      ( Position(..), Span )
+import Language.Rust.Syntax.AST         ( Expr(EmbeddedExpr) )
 
 import Language.Haskell.TH
 import Language.Haskell.TH.Quote        ( QuasiQuoter(..), dataToExpQ, dataToPatQ )
+import qualified Language.Haskell.Meta as LHM
 
 import Control.Applicative              ( (<|>) )
 import Control.Monad                    ( (>=>) )
@@ -66,9 +68,10 @@ import Data.Data                        ( Data )
 -- | Given a parser, convert it into a quasiquoter. The quasiquoter produced does not support
 -- declarations and types. For patterns, it replaces any 'Span' and 'Position' field with a
 -- wild pattern.
-quoter :: Data a => P a -> QuasiQuoter
-quoter p = QuasiQuoter
-             { quoteExp = parse >=> dataToExpQ (const Nothing)
+quoter :: Data a => (forall b. Typeable b => b -> Maybe (Q Exp)) -> P a -> QuasiQuoter
+--quoter :: P ExpQ -> QuasiQuoter
+quoter exprTransformer p = QuasiQuoter
+             { quoteExp = parse >=> dataToExpQ exprTransformer
              , quotePat = parse >=> dataToPatQ wildSpanPos
              , quoteDec = error "this quasiquoter does not support declarations"
              , quoteType = error "this quasiquoter does not support types"
@@ -87,6 +90,12 @@ quoter p = QuasiQuoter
   wildSpanPos :: Typeable b => b -> Maybe (Q Pat)
   wildSpanPos x = ((cast x :: Maybe Span) $> wildP) <|> ((cast x :: Maybe Position) $> wildP)
 
+embeddedCode :: Typeable b => b -> Maybe (Q Exp)
+embeddedCode b = do
+  (EmbeddedExpr _ code _) <- (cast b :: Maybe (Expr Span))
+  pure $ case LHM.parseExp code of
+    Left err -> error $ "Could not parse embedded Haskell code: " ++ err
+    Right expTH -> return expTH
 
 -- | Quasiquoter for literals (see 'Language.Rust.Syntax.Lit').
 --
@@ -94,7 +103,7 @@ quoter p = QuasiQuoter
 -- Float 1.4e29 F64 ()
 --
 lit :: QuasiQuoter
-lit = quoter parseLit
+lit = quoter (const Nothing) parseLit
 
 -- | Quasiquoter for attributes (see 'Language.Rust.Syntax.Attribute')
 --
@@ -102,7 +111,7 @@ lit = quoter parseLit
 -- Attribute Outer (Path False [PathSegment "no_mangle" Nothing ()] ()) (Stream []) ()
 --
 attr :: QuasiQuoter
-attr = quoter parseAttr
+attr = quoter embeddedCode parseAttr
 
 -- | Quasiquoter for types (see 'Language.Rust.Syntax.Ty')
 --
@@ -110,7 +119,7 @@ attr = quoter parseAttr
 -- Rptr Nothing Immutable (TupTy [Infer (),Infer ()] ()) ()
 --
 ty :: QuasiQuoter
-ty = quoter parseTy
+ty = quoter embeddedCode parseTy
 
 -- | Quasiquoter for patterns (see 'Language.Rust.Syntax.Pat')
 --
@@ -119,7 +128,7 @@ ty = quoter parseTy
 --                                              (Lit [] (Int Dec 5 Unsuffixed ()) ()) ())) ()
 --
 pat :: QuasiQuoter
-pat = quoter parsePat
+pat = quoter embeddedCode parsePat
 
 -- | Quasiquoter for statements (see 'Language.Rust.Syntax.Stmt')
 --
@@ -127,7 +136,7 @@ pat = quoter parsePat
 -- Local (IdentP (ByValue Immutable) "x" Nothing ()) Nothing (Just (Lit [] (Int Dec 4 I32 ()) ())) [] ()
 --
 stmt :: QuasiQuoter
-stmt = quoter parseStmt
+stmt = quoter embeddedCode parseStmt
 
 -- | Quasiquoter for expressions (see 'Language.Rust.Syntax.Expr')
 --
@@ -135,7 +144,7 @@ stmt = quoter parseStmt
 -- TupExpr [] [PathExpr [] Nothing (Path False [PathSegment "x" Nothing ()] ()) ()] ()
 --
 expr :: QuasiQuoter
-expr = quoter parseExpr
+expr = quoter embeddedCode parseExpr
 
 -- | Quasiquoter for items (see 'Language.Rust.Syntax.Item')
 --
@@ -143,7 +152,7 @@ expr = quoter parseExpr
 -- TyAlias [] InheritedV "Unit" (TupTy [] ()) (Generics [] [] (WhereClause [] ()) ()) ()
 --
 item :: QuasiQuoter
-item = quoter parseItem
+item = quoter embeddedCode parseItem
 
 -- | Quasiquoter for a whole source file (see 'Language.Rust.Syntax.SourceFile')
 --
@@ -155,7 +164,7 @@ item = quoter parseItem
 --                           (Block [] Normal ()) ()]
 --
 sourceFile :: QuasiQuoter
-sourceFile = quoter parseSourceFile
+sourceFile = quoter embeddedCode parseSourceFile
 
 -- | Quasiquoter for blocks (see 'Language.Rust.Syntax.Block')
 --
@@ -163,7 +172,7 @@ sourceFile = quoter parseSourceFile
 -- Block [NoSemi (Lit [] (Int Dec 1 I32 ()) ()) ()] Unsafe ()
 --
 block :: QuasiQuoter
-block = quoter parseBlock
+block = quoter embeddedCode parseBlock
 
 -- | Quasiquoter for impl items (see 'Language.Rust.Syntax.ImplItem')
 --
@@ -171,7 +180,7 @@ block = quoter parseBlock
 -- TypeI [] InheritedV Final "Item" (TupTy [] ()) ()
 --
 implItem :: QuasiQuoter
-implItem = quoter parseImplItem
+implItem = quoter embeddedCode parseImplItem
 
 -- | Quasiquoter for trait items (see 'Language.Rust.Syntax.TraitItem')
 --
@@ -179,7 +188,7 @@ implItem = quoter parseImplItem
 -- TypeT [] "Item" [] Nothing ()
 --
 traitItem :: QuasiQuoter
-traitItem = quoter parseTraitItem
+traitItem = quoter embeddedCode parseTraitItem
 
 -- | Quasiquoter for token trees (see 'Language.Rust.Syntax.TokenTree')
 --
@@ -187,5 +196,5 @@ traitItem = quoter parseTraitItem
 -- Token (Span (Position 1 2 14) (Position 3 2 16)) fn
 --
 tokenTree :: QuasiQuoter
-tokenTree = quoter parseTt
+tokenTree = quoter embeddedCode parseTt
 
